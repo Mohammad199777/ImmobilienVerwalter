@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:ImmobilienVerwalter.Maui.Models"
+             x:Class="ImmobilienVerwalter.Maui.Views.TenantsPage"
+             Title="Mieter">
+
+    <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsBusy}">
+        <CollectionView ItemsSource="{Binding Tenants}"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="40">
+                    <Label Text="👤" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Noch keine Mieter vorhanden."
+                           HorizontalOptions="Center" TextColor="{StaticResource Gray500}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:TenantDto">
+                    <Frame Margin="12,6" Padding="16" CornerRadius="12"
+                           BorderColor="Transparent" BackgroundColor="White" HasShadow="True">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <Frame Grid.Column="0" WidthRequest="48" HeightRequest="48"
+                                   CornerRadius="24" BackgroundColor="{StaticResource Primary}"
+                                   Padding="0" HasShadow="False">
+                                <Label Text="{Binding FirstName, StringFormat='{0:0}'}"
+                                       FontSize="18" TextColor="White"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Frame>
+                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                                <Label Text="{Binding FullName}" FontSize="16" FontAttributes="Bold" />
+                                <Label Text="{Binding Email}" FontSize="13"
+                                       TextColor="{StaticResource Gray600}" />
+                                <Label Text="{Binding Phone}" FontSize="13"
+                                       TextColor="{StaticResource Gray500}" />
+                            </VerticalStackLayout>
+                            <Frame Grid.Column="2" CornerRadius="12" Padding="8,4"
+                                   BackgroundColor="{StaticResource Gray100}"
+                                   BorderColor="Transparent" HasShadow="False"
+                                   VerticalOptions="Center">
+                                <Label FontSize="12" TextColor="{StaticResource Gray600}">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="{Binding ActiveLeases}" />
+                                            <Span Text=" Verträge" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                            </Frame>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </RefreshView>
+
+</ContentPage>

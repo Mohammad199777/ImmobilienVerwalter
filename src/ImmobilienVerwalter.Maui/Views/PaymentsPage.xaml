@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:ImmobilienVerwalter.Maui.Models"
+             x:Class="ImmobilienVerwalter.Maui.Views.PaymentsPage"
+             Title="Zahlungen">
+
+    <VerticalStackLayout>
+        <!-- Filter -->
+        <HorizontalStackLayout Padding="16,12" Spacing="12" BackgroundColor="White">
+            <Picker Title="Jahr"
+                    ItemsSource="{Binding Years}"
+                    SelectedItem="{Binding SelectedYear}"
+                    WidthRequest="100" />
+            <Picker Title="Monat"
+                    ItemsSource="{Binding MonthNames}"
+                    SelectedIndex="{Binding SelectedMonth, Converter={StaticResource MonthIndexConverter}}"
+                    WidthRequest="140" />
+        </HorizontalStackLayout>
+
+        <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsBusy}">
+            <CollectionView ItemsSource="{Binding Payments}"
+                            SelectionMode="None">
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="40">
+                        <Label Text="💰" FontSize="48" HorizontalOptions="Center" />
+                        <Label Text="Keine Zahlungen für diesen Monat."
+                               HorizontalOptions="Center" TextColor="{StaticResource Gray500}" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:PaymentDto">
+                        <Frame Margin="12,6" Padding="16" CornerRadius="12"
+                               BorderColor="Transparent" BackgroundColor="White" HasShadow="True">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="4">
+                                <Label Grid.Row="0" Grid.Column="0"
+                                       Text="{Binding TenantName}" FontSize="16" FontAttributes="Bold" />
+                                <Label Grid.Row="0" Grid.Column="1"
+                                       Text="{Binding Amount, StringFormat='{0:N2} €'}"
+                                       FontSize="16" FontAttributes="Bold"
+                                       TextColor="{StaticResource Primary}" />
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Text="{Binding UnitName}" FontSize="13"
+                                       TextColor="{StaticResource Gray600}" />
+                                <Label Grid.Row="1" Grid.Column="1"
+                                       Text="{Binding StatusText}" FontSize="13"
+                                       TextColor="{StaticResource Gray500}" />
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+    </VerticalStackLayout>
+
+</ContentPage>

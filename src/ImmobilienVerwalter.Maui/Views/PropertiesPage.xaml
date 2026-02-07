@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:ImmobilienVerwalter.Maui.Models"
+             x:Class="ImmobilienVerwalter.Maui.Views.PropertiesPage"
+             Title="Immobilien">
+
+    <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsBusy}">
+        <CollectionView ItemsSource="{Binding Properties}"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Padding="40">
+                    <Label Text="🏠" FontSize="48" HorizontalOptions="Center" />
+                    <Label Text="Noch keine Immobilien vorhanden."
+                           HorizontalOptions="Center" TextColor="{StaticResource Gray500}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:PropertyDto">
+                    <Frame Margin="12,6" Padding="16" CornerRadius="12"
+                           BorderColor="Transparent" BackgroundColor="White" HasShadow="True">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="{Binding Name}" FontSize="18" FontAttributes="Bold" />
+                            <Label Text="{Binding FullAddress}" FontSize="14"
+                                   TextColor="{StaticResource Gray600}" />
+                            <HorizontalStackLayout Spacing="20">
+                                <Label FontSize="13">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="Einheiten: " FontAttributes="Bold" />
+                                            <Span Text="{Binding UnitCount}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Label FontSize="13">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="Vermietet: " FontAttributes="Bold" />
+                                            <Span Text="{Binding OccupiedUnitCount}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Label FontSize="13" TextColor="{StaticResource Primary}">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="{Binding TotalRentIncome, StringFormat='{0:N2} €'}" />
+                                            <Span Text=" /Monat" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </RefreshView>
+
+</ContentPage>

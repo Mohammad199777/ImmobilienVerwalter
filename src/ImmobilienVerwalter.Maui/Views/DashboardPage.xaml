@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ImmobilienVerwalter.Maui.ViewModels"
+             x:Class="ImmobilienVerwalter.Maui.Views.DashboardPage"
+             Title="Dashboard">
+
+    <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsBusy}">
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="16">
+
+                <Label Text="Übersicht" FontSize="24" FontAttributes="Bold" />
+
+                <!-- KPI-Karten -->
+                <CollectionView ItemsSource="{Binding Cards}"
+                                ItemsLayout="VerticalGrid, 2">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DashboardCard">
+                            <Frame Margin="4" Padding="16" CornerRadius="12"
+                                   BorderColor="Transparent" BackgroundColor="White" HasShadow="True">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding Icon}" FontSize="28" />
+                                    <Label Text="{Binding Label}" FontSize="12"
+                                           TextColor="{StaticResource Gray600}" />
+                                    <Label Text="{Binding Value}" FontSize="20"
+                                           FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                            </Frame>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <!-- Logout -->
+                <Button Text="Abmelden" Command="{Binding LogoutCommand}"
+                        BackgroundColor="{StaticResource Gray200}"
+                        TextColor="{StaticResource Gray900}"
+                        CornerRadius="8" Margin="0,20,0,0" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </RefreshView>
+
+</ContentPage>

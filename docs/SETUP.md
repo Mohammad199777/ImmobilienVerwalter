@@ -1,0 +1,200 @@
+# 🛠️ Setup-Anleitung
+
+> **Letzte Aktualisierung:** 2026-02-07  
+> **Hinweis:** Bei neuen Abhängigkeiten, Konfigurationsänderungen oder Tool-Updates dieses Dokument aktualisieren.
+
+## Voraussetzungen
+
+| Tool                            | Version | Download                                                                 |
+| ------------------------------- | ------- | ------------------------------------------------------------------------ |
+| .NET SDK                        | 9.0+    | [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/9.0) |
+| Node.js                         | 20+     | [nodejs.org](https://nodejs.org/)                                        |
+| SQL Server LocalDB              | 2022    | Wird mit Visual Studio installiert                                       |
+| Visual Studio 2022 oder VS Code | Aktuell | [visualstudio.com](https://visualstudio.com/)                            |
+| Git                             | 2.x     | [git-scm.com](https://git-scm.com/)                                      |
+
+### Optional (für MAUI)
+
+| Tool               | Version                        |
+| ------------------ | ------------------------------ |
+| .NET MAUI Workload | `dotnet workload install maui` |
+| Android SDK        | Via Visual Studio Installer    |
+
+---
+
+## 1. Repository klonen
+
+```bash
+git clone <repository-url>
+cd ImmobilienVerwalter
+```
+
+## 2. SQL Server LocalDB prüfen
+
+```bash
+# LocalDB-Instanz prüfen
+sqllocaldb info MSSQLLocalDB
+
+# Falls nicht vorhanden, erstellen und starten
+sqllocaldb create MSSQLLocalDB
+sqllocaldb start MSSQLLocalDB
+```
+
+Die Datenbank wird beim ersten API-Start **automatisch erstellt** (`EnsureCreated()`).
+
+## 3. Backend (API) starten
+
+```bash
+cd src/ImmobilienVerwalter.API
+dotnet restore
+dotnet run
+```
+
+**Die API ist verfügbar unter:**
+
+- API: `https://localhost:5001`
+- Swagger UI: `https://localhost:5001/swagger`
+
+### Konfiguration
+
+Die Konfiguration liegt in `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=ImmobilienVerwalter;Trusted_Connection=true;TrustServerCertificate=true;"
+  },
+  "Jwt": {
+    "Secret": "<min. 32 Zeichen>",
+    "Issuer": "ImmobilienVerwalter",
+    "Audience": "ImmobilienVerwalterApp"
+  }
+}
+```
+
+> ⚠️ **Wichtig:** Den JWT-Secret in Production über User Secrets oder Umgebungsvariablen setzen! Siehe [SECURITY.md](SECURITY.md).
+
+## 4. Web-Frontend starten
+
+```bash
+cd src/immobilienverwalter-web
+npm install
+npm run dev
+```
+
+**Das Frontend ist verfügbar unter:**
+
+- Web: `http://localhost:3000`
+
+### Umgebungsvariablen (optional)
+
+Falls die API nicht auf dem Standard-Port läuft, eine `.env.local` erstellen:
+
+```env
+NEXT_PUBLIC_API_URL=https://localhost:5001/api
+```
+
+## 5. MAUI App starten (optional)
+
+```bash
+# MAUI Workload installieren (einmalig)
+dotnet workload install maui
+
+# Windows-App starten
+cd src/ImmobilienVerwalter.Maui
+dotnet run -f net9.0-windows10.0.19041.0
+```
+
+## Tipps für die Entwicklung
+
+### Beide Projekte gleichzeitig starten
+
+**Terminal 1 – API:**
+
+```bash
+cd src/ImmobilienVerwalter.API
+dotnet watch run
+```
+
+**Terminal 2 – Web:**
+
+```bash
+cd src/immobilienverwalter-web
+npm run dev
+```
+
+### Datenbank zurücksetzen
+
+Die Datenbank kann einfach gelöscht werden – sie wird beim nächsten Start neu erstellt:
+
+```bash
+sqllocaldb stop MSSQLLocalDB
+sqllocaldb delete MSSQLLocalDB
+sqllocaldb create MSSQLLocalDB
+sqllocaldb start MSSQLLocalDB
+```
+
+### VS Code empfohlene Extensions
+
+| Extension                 | Zweck                  |
+| ------------------------- | ---------------------- |
+| C# Dev Kit                | .NET-Entwicklung       |
+| REST Client               | `.http`-Dateien testen |
+| ESLint                    | TypeScript Linting     |
+| Tailwind CSS IntelliSense | Tailwind Autocomplete  |
+| Prettier                  | Code-Formatierung      |
+
+### API testen
+
+Die Datei `src/ImmobilienVerwalter.API/ImmobilienVerwalter.API.http` enthält vorgefertigte HTTP-Requests für die REST Client Extension.
+
+## Projektstruktur
+
+```
+ImmobilienVerwalter/
+├── docs/                                    # Dokumentation
+├── src/
+│   ├── ImmobilienVerwalter.Core/            # Domain (Entities, Interfaces)
+│   │   ├── Entities/                        # Domain-Objekte
+│   │   └── Interfaces/                      # Repository- & UoW-Interfaces
+│   ├── ImmobilienVerwalter.Infrastructure/  # Datenzugriff
+│   │   ├── Data/                            # DbContext & Konfigurationen
+│   │   └── Repositories/                    # Repository-Implementierungen
+│   ├── ImmobilienVerwalter.API/             # Web API
+│   │   ├── Controllers/                     # API-Endpunkte
+│   │   ├── DTOs/                            # Data Transfer Objects
+│   │   └── Services/                        # Business-Logik
+│   ├── ImmobilienVerwalter.Maui/            # Mobile/Desktop App
+│   │   ├── Views/                           # XAML-Seiten
+│   │   ├── ViewModels/                      # MVVM-ViewModels
+│   │   └── Services/                        # API-Client
+│   └── immobilienverwalter-web/             # Web-Frontend
+│       └── src/app/                         # Next.js App Router
+└── ImmobilienVerwalter.sln                  # Solution-Datei
+```
+
+## Häufige Probleme
+
+### API startet nicht – SQL Server Fehler
+
+```
+SqlException: Cannot open database "ImmobilienVerwalter"
+```
+
+**Lösung:** LocalDB prüfen und starten:
+
+```bash
+sqllocaldb start MSSQLLocalDB
+```
+
+### CORS-Fehler im Browser
+
+```
+Access to fetch has been blocked by CORS policy
+```
+
+**Lösung:** Sicherstellen, dass das Frontend auf `http://localhost:3000` läuft (konfiguriert in `Program.cs`).
+
+### JWT Token abgelaufen
+
+Token sind 7 Tage gültig. Bei Ablauf erneut über `/api/auth/login` anmelden.

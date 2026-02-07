@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="ImmobilienVerwalter.Maui.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:views="clr-namespace:ImmobilienVerwalter.Maui.Views"
+    Title="ImmobilienVerwalter"
+    Shell.FlyoutBehavior="Flyout"
+    FlyoutHeaderBehavior="Fixed">
+
+    <Shell.FlyoutHeader>
+        <VerticalStackLayout Padding="20" BackgroundColor="{StaticResource Primary}" Spacing="4">
+            <Label Text="🏠" FontSize="36" TextColor="White" />
+            <Label Text="ImmobilienVerwalter" FontSize="20" FontAttributes="Bold" TextColor="White" />
+            <Label Text="Verwaltung für Vermieter" FontSize="13" TextColor="White" Opacity="0.8" />
+        </VerticalStackLayout>
+    </Shell.FlyoutHeader>
+
+    <FlyoutItem Title="Dashboard" Icon="{x:Null}">
+        <ShellContent ContentTemplate="{DataTemplate views:DashboardPage}" Route="dashboard" />
+    </FlyoutItem>
+    <FlyoutItem Title="Immobilien" Icon="{x:Null}">
+        <ShellContent ContentTemplate="{DataTemplate views:PropertiesPage}" Route="properties" />
+    </FlyoutItem>
+    <FlyoutItem Title="Mieter" Icon="{x:Null}">
+        <ShellContent ContentTemplate="{DataTemplate views:TenantsPage}" Route="tenants" />
+    </FlyoutItem>
+    <FlyoutItem Title="Zahlungen" Icon="{x:Null}">
+        <ShellContent ContentTemplate="{DataTemplate views:PaymentsPage}" Route="payments" />
+    </FlyoutItem>
+
+</Shell>
