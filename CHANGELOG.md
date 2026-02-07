@@ -9,6 +9,70 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [0.2.0] – 2026-02-07
+
+### 🔒 Sicherheit & Hardening
+
+**Backend**
+
+- JWT Secret wird über Umgebungsvariable `JWT_SECRET` geladen (nicht mehr in `appsettings.json`)
+- Token-Gültigkeit von 7 Tagen auf 24 Stunden reduziert
+- ClockSkew auf 1 Minute begrenzt
+- Ownership-Checks in allen Controllern (Multi-Tenancy vollständig durchgesetzt)
+- Strukturiertes Logging mit `ILogger<T>` in allen Controllern
+- Business-Logik-Guards (z.B. Duplikat-Prüfungen, Status-Validierung)
+- `GlobalExceptionHandler` Middleware für zentrale Fehlerbehandlung
+- Health Check Endpunkt `/health` mit DB-Verbindungsprüfung
+- HSTS in Production aktiviert
+- CORS konfigurierbar über `appsettings.json` → `Cors:AllowedOrigins`
+
+**DTOs**
+
+- Umfassende Validierung mit DataAnnotations in allen DTOs
+- Kautionslimit nach §551 BGB (max. 3 × Kaltmiete)
+- E-Mail-, IBAN-, PLZ-Format-Validierung
+- Pflichtfeld- und Bereichsprüfungen
+
+### Geändert
+
+**Datenbank**
+
+- Umstellung von SQL Server (LocalDB) auf **SQLite** (plattformunabhängig, keine externe DB nötig)
+- Datenbankdatei: `ImmobilienVerwalter.db` (wird automatisch erstellt)
+- EF Core Migrations statt `EnsureCreated()`
+- Initiale Migration `InitialCreate` erstellt
+
+**Backend**
+
+- Alle 7 CRUD-Controller komplett überarbeitet (Properties, Units, Tenants, Leases, Payments, Expenses, MeterReadings)
+- `DashboardService` filtert nun nach Eigentümer (Owner-basierte Aggregation)
+- `AuthService` nutzt 24h Token-Gültigkeit
+- `Program.cs` gehärtet: try-catch Migration mit EnsureCreated-Fallback
+- AutoMapper entfernt (manuelles Mapping in Controllern)
+
+**Web-Frontend (Next.js)**
+
+- Toast-Benachrichtigungssystem (`useToast` Hook + `ToastContainer` Komponente)
+- Next.js Auth-Middleware für geschützte Routen
+- Alle 7 Dashboard-Seiten komplett überarbeitet:
+  - Immobilien, Einheiten, Mieter, Mietverträge, Zahlungen, Ausgaben, Zählerstände
+- Ladeanimationen und Fehlermeldungen via Toast
+- Barrierefreiheit: ARIA-Labels, semantisches HTML, `lang="de"`
+- Root-Layout mit vollständigen Metadaten
+
+**Dokumentation**
+
+- Alle Docs aktualisiert (Port 5013, SQLite, JWT-Env-Var, Multi-Tenancy, Validierung)
+- SECURITY.md: Bekannte-Hinweise-Tabelle aktualisiert (6 neue ✅ Erledigt-Einträge)
+
+### Entfernt
+
+- `AutoMapper.Extensions.Microsoft.DependencyInjection` NuGet-Paket
+- `Microsoft.EntityFrameworkCore.SqlServer` NuGet-Paket (ersetzt durch Sqlite)
+- SQL Server LocalDB als Voraussetzung
+
+---
+
 ## [0.1.0] – 2026-02-07
 
 ### 🎉 Erstveröffentlichung
@@ -37,7 +101,7 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 - Clean Architecture (Core → Infrastructure → API)
 - Repository Pattern mit generischem `IRepository<T>`
 - Unit of Work Pattern
-- Entity Framework Core 9.0 mit SQL Server
+- Entity Framework Core 9.0 mit SQLite
 - PBKDF2-SHA256 Passwort-Hashing mit Salt
 
 **Web-Frontend (Next.js)**

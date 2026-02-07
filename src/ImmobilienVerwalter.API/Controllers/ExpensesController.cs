@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ImmobilienVerwalter.API.DTOs;
 using ImmobilienVerwalter.Core.Entities;
 using ImmobilienVerwalter.Core.Interfaces;
@@ -12,18 +13,40 @@ namespace ImmobilienVerwalter.API.Controllers;
 public class ExpensesController : ControllerBase
 {
     private readonly IUnitOfWork _uow;
-    public ExpensesController(IUnitOfWork uow) => _uow = uow;
+    private readonly ILogger<ExpensesController> _logger;
+
+    public ExpensesController(IUnitOfWork uow, ILogger<ExpensesController> logger)
+    {
+        _uow = uow;
+        _logger = logger;
+    }
+
+    private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private async Task<HashSet<Guid>> GetOwnerPropertyIdsAsync()
+    {
+        var properties = await _uow.Properties.GetByOwnerIdAsync(GetUserId());
+        return properties.Select(p => p.Id).ToHashSet();
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ExpenseDto>>> GetAll()
     {
         var expenses = await _uow.Expenses.GetAllAsync();
-        return Ok(expenses.Select(MapToDto));
+        var propertyIds = await GetOwnerPropertyIdsAsync();
+        // Nur Ausgaben mit eigenen Properties oder ohne Property-Zuordnung
+        var filtered = expenses.Where(e =>
+            e.PropertyId == null || propertyIds.Contains(e.PropertyId.Value));
+        return Ok(filtered.Select(MapToDto));
     }
 
     [HttpGet("property/{propertyId}")]
     public async Task<ActionResult<IEnumerable<ExpenseDto>>> GetByProperty(Guid propertyId)
     {
+        var propertyIds = await GetOwnerPropertyIdsAsync();
+        if (!propertyIds.Contains(propertyId))
+            return NotFound();
+
         var expenses = await _uow.Expenses.GetByPropertyIdAsync(propertyId);
         return Ok(expenses.Select(MapToDto));
     }
@@ -38,6 +61,14 @@ public class ExpensesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ExpenseDto>> Create([FromBody] ExpenseCreateDto dto)
     {
+        // Ownership prüfen wenn Property zugeordnet
+        if (dto.PropertyId.HasValue)
+        {
+            var propertyIds = await GetOwnerPropertyIdsAsync();
+            if (!propertyIds.Contains(dto.PropertyId.Value))
+                return Forbid();
+        }
+
         var expense = new Expense
         {
             Title = dto.Title,
@@ -59,7 +90,9 @@ public class ExpensesController : ControllerBase
 
         await _uow.Expenses.AddAsync(expense);
         await _uow.SaveChangesAsync();
-        return Ok(MapToDto(expense));
+
+        _logger.LogInformation("Ausgabe '{Title}' ({Amount}€) erstellt", dto.Title, dto.Amount);
+        return CreatedAtAction(nameof(GetById), new { id = expense.Id }, MapToDto(expense));
     }
 
     [HttpGet("{id}")]
@@ -105,6 +138,8 @@ public class ExpensesController : ControllerBase
 
         await _uow.Expenses.DeleteAsync(id);
         await _uow.SaveChangesAsync();
+
+        _logger.LogInformation("Ausgabe {ExpenseId} gelöscht", id);
         return NoContent();
     }
 

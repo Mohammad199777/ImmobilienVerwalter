@@ -13,8 +13,13 @@ namespace ImmobilienVerwalter.API.Controllers;
 public class PropertiesController : ControllerBase
 {
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<PropertiesController> _logger;
 
-    public PropertiesController(IUnitOfWork uow) => _uow = uow;
+    public PropertiesController(IUnitOfWork uow, ILogger<PropertiesController> logger)
+    {
+        _uow = uow;
+        _logger = logger;
+    }
 
     private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -89,12 +94,17 @@ public class PropertiesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(Guid id)
     {
-        var property = await _uow.Properties.GetByIdAsync(id);
+        var property = await _uow.Properties.GetWithUnitsAsync(id);
         if (property == null || property.OwnerId != GetUserId())
             return NotFound();
 
+        if (property.Units != null && property.Units.Any())
+            return BadRequest(new { message = "Immobilie kann nicht gelöscht werden, da noch Einheiten zugeordnet sind." });
+
         await _uow.Properties.DeleteAsync(id);
         await _uow.SaveChangesAsync();
+
+        _logger.LogInformation("Immobilie {PropertyId} gelöscht", id);
         return NoContent();
     }
 

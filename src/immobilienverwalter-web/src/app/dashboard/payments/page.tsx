@@ -1,6 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { paymentsApi, leasesApi } from "@/lib/api";
+import { getErrorMessage } from "@/lib/useToast";
+import { useAppToast } from "../layout";
 import { Euro, Plus, Trash2, X } from "lucide-react";
 
 interface Payment {
@@ -17,7 +19,6 @@ interface Payment {
   reference?: string;
   notes?: string;
 }
-
 interface LeaseOption {
   id: string;
   tenantName: string;
@@ -76,41 +77,49 @@ const emptyForm = {
 };
 
 export default function PaymentsPage() {
+  const toast = useAppToast();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [activeLeases, setActiveLeases] = useState<LeaseOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
+  // Dynamische Jahr-Liste: aktuelles Jahr ± 2
+  const years = useMemo(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => current - 2 + i);
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     paymentsApi
       .getByMonth(year, month)
       .then((res) => setPayments(res.data))
-      .catch(console.error)
+      .catch((err) => toast(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [year, month]);
+  }, [year, month, toast]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     load();
-  }, [year, month]);
+  }, [load]);
 
   const openCreate = async () => {
     try {
       const res = await leasesApi.getActive();
       setActiveLeases(res.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
     setForm({ ...emptyForm, paymentMonth: month, paymentYear: year });
     setShowCreate(true);
   };
 
   const handleCreate = async () => {
+    setSubmitting(true);
     try {
       await paymentsApi.create({
         leaseId: form.leaseId,
@@ -125,10 +134,13 @@ export default function PaymentsPage() {
         reference: form.reference || undefined,
         notes: form.notes || undefined,
       });
+      toast("Zahlung erfasst.", "success");
       setShowCreate(false);
       load();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -136,9 +148,10 @@ export default function PaymentsPage() {
     if (!confirm("Zahlung wirklich löschen?")) return;
     try {
       await paymentsApi.delete(id);
+      toast("Zahlung gelöscht.", "success");
       load();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
   };
 
@@ -177,7 +190,7 @@ export default function PaymentsPage() {
           value={year}
           onChange={(e) => setYear(parseInt(e.target.value))}
         >
-          {[2024, 2025, 2026, 2027].map((y) => (
+          {years.map((y) => (
             <option key={y} value={y}>
               {y}
             </option>
@@ -245,7 +258,7 @@ export default function PaymentsPage() {
                     <button
                       onClick={() => handleDelete(p.id)}
                       className="text-red-500 hover:text-red-700"
-                      title="Löschen"
+                      aria-label="Löschen"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -269,7 +282,10 @@ export default function PaymentsPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Neue Zahlung</h2>
-              <button onClick={() => setShowCreate(false)}>
+              <button
+                onClick={() => setShowCreate(false)}
+                aria-label="Schließen"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -308,6 +324,7 @@ export default function PaymentsPage() {
                   <input
                     type="number"
                     step="0.01"
+                    min={0.01}
                     value={form.amount || ""}
                     onChange={(e) =>
                       setForm({ ...form, amount: +e.target.value })
@@ -385,14 +402,19 @@ export default function PaymentsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Jahr
                   </label>
-                  <input
-                    type="number"
+                  <select
                     value={form.paymentYear}
                     onChange={(e) =>
                       setForm({ ...form, paymentYear: +e.target.value })
                     }
                     className="w-full border rounded-lg px-3 py-2"
-                  />
+                  >
+                    {years.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -459,10 +481,10 @@ export default function PaymentsPage() {
               </div>
               <button
                 onClick={handleCreate}
-                disabled={!form.leaseId || !form.amount}
+                disabled={!form.leaseId || !form.amount || submitting}
                 className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                Zahlung erfassen
+                {submitting ? "Erfassen…" : "Zahlung erfassen"}
               </button>
             </div>
           </div>

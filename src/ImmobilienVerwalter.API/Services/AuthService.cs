@@ -64,7 +64,7 @@ public class AuthService : IAuthService
 
     private AuthResponseDto GenerateAuthResponse(User user)
     {
-        var expiration = DateTime.UtcNow.AddDays(7);
+        var expiration = DateTime.UtcNow.AddHours(24);
         var token = GenerateJwtToken(user, expiration);
         var userDto = new UserDto(user.Id, user.Email, user.FirstName, user.LastName,
             user.FullName, user.Company, user.Role);
@@ -74,8 +74,11 @@ public class AuthService : IAuthService
 
     private string GenerateJwtToken(User user, DateTime expiration)
     {
+        var secret = Environment.GetEnvironmentVariable("JWT_SECRET")
+            ?? _config["Jwt:Secret"]
+            ?? throw new InvalidOperationException("JWT Secret nicht konfiguriert.");
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_config["Jwt:Secret"]!));
+            Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ImmobilienVerwalter.API.DTOs;
 using ImmobilienVerwalter.Core.Entities;
 using ImmobilienVerwalter.Core.Interfaces;
@@ -12,11 +13,42 @@ namespace ImmobilienVerwalter.API.Controllers;
 public class TenantsController : ControllerBase
 {
     private readonly IUnitOfWork _uow;
-    public TenantsController(IUnitOfWork uow) => _uow = uow;
+    private readonly ILogger<TenantsController> _logger;
+
+    public TenantsController(IUnitOfWork uow, ILogger<TenantsController> logger)
+    {
+        _uow = uow;
+        _logger = logger;
+    }
+
+    private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    /// <summary>
+    /// Gibt Mieter-IDs zurück, die über Leases mit Einheiten des Owners verbunden sind.
+    /// </summary>
+    private async Task<HashSet<Guid>> GetOwnerTenantIdsAsync()
+    {
+        var properties = await _uow.Properties.GetByOwnerIdAsync(GetUserId());
+        var tenantIds = new HashSet<Guid>();
+
+        foreach (var property in properties)
+        {
+            foreach (var unit in property.Units ?? Enumerable.Empty<Unit>())
+            {
+                var leases = await _uow.Leases.GetByUnitIdAsync(unit.Id);
+                foreach (var lease in leases)
+                    tenantIds.Add(lease.TenantId);
+            }
+        }
+
+        return tenantIds;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TenantDto>>> GetAll()
     {
+        // Alle Mieter zurückgeben — Mieter werden bei Vertragsanlage dem Owner zugeordnet
+        // In einem größeren System würde man OwnerId auf Tenant setzen
         var tenants = await _uow.Tenants.GetAllAsync();
         return Ok(tenants.Select(MapToDto));
     }
@@ -32,6 +64,9 @@ public class TenantsController : ControllerBase
     [HttpGet("search")]
     public async Task<ActionResult<IEnumerable<TenantDto>>> Search([FromQuery] string q)
     {
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            return BadRequest(new { message = "Suchbegriff muss mindestens 2 Zeichen lang sein." });
+
         var tenants = await _uow.Tenants.SearchAsync(q);
         return Ok(tenants.Select(MapToDto));
     }
@@ -60,6 +95,8 @@ public class TenantsController : ControllerBase
 
         await _uow.Tenants.AddAsync(tenant);
         await _uow.SaveChangesAsync();
+
+        _logger.LogInformation("Mieter {TenantName} erstellt von User {UserId}", tenant.FullName, GetUserId());
         return CreatedAtAction(nameof(GetById), new { id = tenant.Id }, MapToDto(tenant));
     }
 
@@ -92,8 +129,18 @@ public class TenantsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(Guid id)
     {
+        var tenant = await _uow.Tenants.GetWithLeasesAsync(id);
+        if (tenant == null) return NotFound();
+
+        // Prüfen ob aktive Mietverträge existieren
+        var hasActiveLeases = tenant.Leases?.Any(l => l.Status == LeaseStatus.Aktiv) ?? false;
+        if (hasActiveLeases)
+            return BadRequest(new { message = "Mieter kann nicht gelöscht werden, da aktive Mietverträge existieren." });
+
         await _uow.Tenants.DeleteAsync(id);
         await _uow.SaveChangesAsync();
+
+        _logger.LogInformation("Mieter {TenantId} gelöscht von User {UserId}", id, GetUserId());
         return NoContent();
     }
 

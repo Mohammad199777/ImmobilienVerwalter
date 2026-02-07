@@ -11,6 +11,11 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
 # User-specific files
 *.rsuser
 *.suo

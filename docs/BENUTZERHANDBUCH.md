@@ -55,7 +55,7 @@ Für eine vollständige Übersicht der Fachbegriffe siehe [Glossar](GLOSSARY.md)
 2. Klicken Sie auf **Anmelden**
 3. Sie werden zum Dashboard weitergeleitet
 
-> **Hinweis:** Ihre Sitzung ist 7 Tage gültig. Danach müssen Sie sich erneut anmelden.
+> **Hinweis:** Ihre Sitzung ist 24 Stunden gültig. Danach müssen Sie sich erneut anmelden.
 
 ---
 
@@ -328,7 +328,7 @@ _Der Datenexport (CSV, PDF) befindet sich in Entwicklung._
 
 ### Werden meine Daten gesichert?
 
-Die Daten werden in einer SQL Server Datenbank gespeichert. Regelmäßige Backups sollten eingerichtet werden.
+Die Daten werden in einer SQLite-Datenbankdatei (`ImmobilienVerwalter.db`) gespeichert. Regelmäßige Backups dieser Datei sollten eingerichtet werden.
 
 ### Kann ich mehrere Benutzer haben?
 

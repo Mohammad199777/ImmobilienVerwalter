@@ -18,13 +18,14 @@
 
 ### Token-Konfiguration
 
-| Parameter       | Wert                     | Konfiguration                       |
-| --------------- | ------------------------ | ----------------------------------- |
-| **Algorithmus** | HMAC-SHA256              | Hardcoded                           |
-| **Gültigkeit**  | 7 Tage                   | `AuthService.cs` → `AddDays(7)`     |
-| **Issuer**      | `ImmobilienVerwalter`    | `appsettings.json` → `Jwt:Issuer`   |
-| **Audience**    | `ImmobilienVerwalterApp` | `appsettings.json` → `Jwt:Audience` |
-| **Secret**      | Min. 32 Zeichen          | `appsettings.json` → `Jwt:Secret`   |
+| Parameter       | Wert                     | Konfiguration                                          |
+| --------------- | ------------------------ | ------------------------------------------------------ |
+| **Algorithmus** | HMAC-SHA256              | Hardcoded                                              |
+| **Gültigkeit**  | 24 Stunden               | `AuthService.cs` → `AddHours(24)`                      |
+| **Issuer**      | `ImmobilienVerwalter`    | `appsettings.json` → `Jwt:Issuer`                      |
+| **Audience**    | `ImmobilienVerwalterApp` | `appsettings.json` → `Jwt:Audience`                    |
+| **Secret**      | Min. 32 Zeichen          | Umgebungsvariable `JWT_SECRET` oder `appsettings.json` |
+| **ClockSkew**   | 1 Minute                 | `Program.cs` → `TokenValidationParameters`             |
 
 ### Token-Claims
 
@@ -69,52 +70,78 @@ Passwörter werden **niemals im Klartext** gespeichert.
 
 ## Multi-Tenancy (Datentrennung)
 
-Jede `Property` gehört einem Benutzer über `OwnerId`. Der `PropertiesController` filtert automatisch:
+Jede `Property` gehört einem Benutzer über `OwnerId`. **Alle Controller** filtern Daten nach dem angemeldeten Benutzer:
 
 ```csharp
 private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-// Nur eigene Properties laden
+// Eigentümerprüfung in allen Controllern
 var properties = await _uow.Properties.GetByOwnerIdAsync(GetUserId());
 ```
 
-> ⚠️ **Achtung:** Diese Filterung ist aktuell nur im `PropertiesController` implementiert. Andere Controller (Units, Tenants, etc.) filtern **noch nicht** nach Eigentümer.
+Controller mit Eigentümerprüfung (Ownership Checks):
+
+- ✅ `PropertiesController` – filtert nach `OwnerId`
+- ✅ `UnitsController` – prüft Property-Ownership
+- ✅ `TenantsController` – filtert nach Leases/Units des Eigentümers
+- ✅ `LeasesController` – prüft Unit/Property-Ownership
+- ✅ `PaymentsController` – prüft Lease/Unit/Property-Ownership
+- ✅ `ExpensesController` – prüft Property-Ownership
+- ✅ `MeterReadingsController` – prüft Unit/Property-Ownership
+- ✅ `DashboardController` – zeigt nur eigene Daten
 
 ## CORS (Cross-Origin Resource Sharing)
 
 ```csharp
-policy.WithOrigins("http://localhost:3000")  // Next.js Frontend
+// Konfigurierbar über appsettings.json
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:3000"];
+
+policy.WithOrigins(allowedOrigins)
       .AllowAnyHeader()
       .AllowAnyMethod()
       .AllowCredentials();
 ```
 
-| Parameter             | Wert                                |
-| --------------------- | ----------------------------------- |
-| **Erlaubte Origins**  | `http://localhost:3000`             |
-| **Erlaubte Header**   | Alle                                |
-| **Erlaubte Methoden** | Alle (GET, POST, PUT, DELETE, etc.) |
-| **Credentials**       | Erlaubt (für Cookies/Auth-Header)   |
+| Parameter             | Wert                                                         |
+| --------------------- | ------------------------------------------------------------ |
+| **Erlaubte Origins**  | Konfigurierbar in `appsettings.json` → `Cors:AllowedOrigins` |
+| **Standard-Origin**   | `http://localhost:3000`                                      |
+| **Erlaubte Header**   | Alle                                                         |
+| **Erlaubte Methoden** | Alle (GET, POST, PUT, DELETE, etc.)                          |
+| **Credentials**       | Erlaubt (für Cookies/Auth-Header)                            |
 
-> 🔴 **TODO für Production:** CORS auf die tatsächliche Domain einschränken.
+> Für Production die `Cors:AllowedOrigins` in `appsettings.Production.json` auf die tatsächliche Domain setzen.
 
 ## Secrets-Management
 
 ### Development
 
-Secrets liegen aktuell in `appsettings.json`:
+In Development wird der JWT Secret aus `appsettings.Development.json` geladen:
 
 ```json
 {
   "Jwt": {
-    "Secret": "DeinSuperGeheimerSchluessel_MindestensSechs32Zeichen!!"
+    "Secret": "DevOnly_ImmobilienVerwalter_SuperSecretKey_Min32Chars!!"
   }
 }
 ```
 
-### Production (empfohlen)
+> ⚠️ Dieser Secret wird **nur** in Development genutzt und ist **nicht** in `appsettings.json` enthalten.
 
-Secrets sollten NICHT in `appsettings.json` liegen, sondern über:
+### Production
+
+Der JWT Secret wird über die **Umgebungsvariable `JWT_SECRET`** gesetzt (bereits implementiert):
+
+```bash
+# Windows
+set JWT_SECRET=EinSichererSchlüssel...
+
+# Linux / macOS
+export JWT_SECRET=EinSichererSchlüssel...
+```
+
+Alternativ:
 
 1. **User Secrets** (lokal):
 
@@ -122,29 +149,28 @@ Secrets sollten NICHT in `appsettings.json` liegen, sondern über:
    dotnet user-secrets set "Jwt:Secret" "EinSichererSchlüssel..."
    ```
 
-2. **Umgebungsvariablen**:
-
-   ```bash
-   set Jwt__Secret=EinSichererSchlüssel...
-   ```
-
-3. **Azure Key Vault** (Cloud):
+2. **Azure Key Vault** (Cloud):
    ```csharp
    builder.Configuration.AddAzureKeyVault(...);
    ```
 
+> Die Reihenfolge der Secret-Auflösung: `JWT_SECRET` Env-Var → `appsettings.json` → Fehler (App startet nicht ohne Secret).
+
 ## Bekannte Sicherheits-Hinweise
 
-| Priorität   | Thema                                                                | Status   |
-| ----------- | -------------------------------------------------------------------- | -------- |
-| 🔴 Hoch     | JWT Secret in `appsettings.json` → User Secrets / Env Vars verwenden | ⚠️ Offen |
-| 🔴 Hoch     | Multi-Tenancy Filterung in allen Controllern durchsetzen             | ⚠️ Offen |
-| 🟡 Mittel   | Rate Limiting für Login-Endpunkt                                     | ⚠️ Offen |
-| 🟡 Mittel   | Refresh Token implementieren (statt 7-Tage Token)                    | ⚠️ Offen |
-| 🟡 Mittel   | Input-Validierung (FluentValidation)                                 | ⚠️ Offen |
-| 🟡 Mittel   | CORS für Production konfigurieren                                    | ⚠️ Offen |
-| 🟢 Niedrig  | `[Authorize(Roles = "...")]` auf Controller-Ebene                    | ⚠️ Offen |
-| ✅ Erledigt | Passwort-Hashing mit PBKDF2 + Salt                                   | ✅       |
-| ✅ Erledigt | JWT-Authentifizierung                                                | ✅       |
-| ✅ Erledigt | Soft Delete (keine physische Löschung)                               | ✅       |
-| ✅ Erledigt | Timing-sichere Passwort-Prüfung                                      | ✅       |
+| Priorität   | Thema                                                     | Status   |
+| ----------- | --------------------------------------------------------- | -------- |
+| 🟡 Mittel   | Rate Limiting für Login-Endpunkt                          | ⚠️ Offen |
+| 🟡 Mittel   | Refresh Token implementieren (statt 24h Token)            | ⚠️ Offen |
+| 🟢 Niedrig  | `[Authorize(Roles = "...")]` auf Controller-Ebene         | ⚠️ Offen |
+| ✅ Erledigt | JWT Secret über Umgebungsvariable `JWT_SECRET`            | ✅       |
+| ✅ Erledigt | Multi-Tenancy Filterung in allen Controllern              | ✅       |
+| ✅ Erledigt | Input-Validierung mit DataAnnotations in allen DTOs       | ✅       |
+| ✅ Erledigt | CORS konfigurierbar über `appsettings.json`               | ✅       |
+| ✅ Erledigt | Token-Gültigkeit auf 24 Stunden reduziert (vorher 7 Tage) | ✅       |
+| ✅ Erledigt | GlobalExceptionHandler Middleware                         | ✅       |
+| ✅ Erledigt | Health Check Endpunkt (`/health`)                         | ✅       |
+| ✅ Erledigt | Passwort-Hashing mit PBKDF2 + Salt                        | ✅       |
+| ✅ Erledigt | JWT-Authentifizierung                                     | ✅       |
+| ✅ Erledigt | Soft Delete (keine physische Löschung)                    | ✅       |
+| ✅ Erledigt | Timing-sichere Passwort-Prüfung                           | ✅       |

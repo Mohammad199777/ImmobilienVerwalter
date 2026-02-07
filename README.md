@@ -25,7 +25,7 @@ ImmobilienVerwalter/
 | Komponente            | Technologie                                      |
 | --------------------- | ------------------------------------------------ |
 | **Backend API**       | ASP.NET Core 9.0, C#                             |
-| **Datenbank**         | SQL Server (LocalDB in Dev)                      |
+| **Datenbank**         | SQLite (Datei-basiert, kein externer Server)     |
 | **ORM**               | Entity Framework Core 9.0                        |
 | **Authentifizierung** | JWT Bearer Token                                 |
 | **Web-Frontend**      | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
@@ -39,7 +39,6 @@ ImmobilienVerwalter/
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 - [Node.js 20+](https://nodejs.org/)
-- [SQL Server LocalDB](https://docs.microsoft.com/sql/database-engine/configure-windows/sql-server-express-localdb) (wird mit Visual Studio installiert)
 
 ### 1. Backend starten
 
@@ -48,8 +47,8 @@ cd src/ImmobilienVerwalter.API
 dotnet run
 ```
 
-Die API läuft unter `https://localhost:5001` (Swagger UI: `https://localhost:5001/swagger`).
-Die Datenbank wird beim ersten Start automatisch erstellt (`EnsureCreated`).
+Die API läuft unter `http://localhost:5013` (Swagger UI: `http://localhost:5013/swagger`).
+Die Datenbank (`ImmobilienVerwalter.db`) wird beim ersten Start automatisch erstellt und migriert.
 
 ### 2. Web-Frontend starten
 

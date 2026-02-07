@@ -2,12 +2,12 @@
 
 > **Letzte Aktualisierung:** 2026-02-07  
 > **Hinweis:** Bei neuen Endpunkten, geänderten DTOs oder neuen Controllern dieses Dokument aktualisieren.  
-> **Swagger UI:** `https://localhost:5001/swagger` (nur in Development)
+> **Swagger UI:** `http://localhost:5013/swagger` (nur in Development)
 
 ## Basis-URL
 
 ```
-https://localhost:5001/api
+http://localhost:5013/api
 ```
 
 ## Authentifizierung

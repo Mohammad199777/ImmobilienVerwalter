@@ -1,6 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { tenantsApi, TenantCreate } from "@/lib/api";
+import { getErrorMessage } from "@/lib/useToast";
+import { useAppToast } from "../layout";
 import { Users, Plus, Mail, Phone, Edit, Trash2, X } from "lucide-react";
 
 interface Tenant {
@@ -11,18 +13,28 @@ interface Tenant {
   email: string;
   phone?: string;
   mobilePhone?: string;
+  iban?: string;
+  bic?: string;
+  bankName?: string;
   dateOfBirth?: string;
   occupation?: string;
+  monthlyIncome?: number;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   notes?: string;
   activeLeases: number;
 }
 
 export default function TenantsPage() {
+  const toast = useAppToast();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [search, setSearch] = useState("");
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [form, setForm] = useState<TenantCreate>({
     firstName: "",
@@ -30,18 +42,28 @@ export default function TenantsPage() {
     email: "",
   });
 
+  // Debounce Suche
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [search]);
+
   const loadTenants = useCallback(async () => {
     try {
-      const res = search
-        ? await tenantsApi.search(search)
-        : await tenantsApi.getAll();
+      const res =
+        debouncedSearch.length >= 2
+          ? await tenantsApi.search(debouncedSearch)
+          : await tenantsApi.getAll();
       setTenants(res.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [debouncedSearch, toast]);
 
   useEffect(() => {
     loadTenants();
@@ -49,18 +71,23 @@ export default function TenantsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       if (editing) {
         await tenantsApi.update(editing.id, form);
+        toast("Mieter aktualisiert.", "success");
       } else {
         await tenantsApi.create(form);
+        toast("Mieter erstellt.", "success");
       }
       setShowForm(false);
       setEditing(null);
       setForm({ firstName: "", lastName: "", email: "" });
       loadTenants();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -72,8 +99,14 @@ export default function TenantsPage() {
       email: t.email,
       phone: t.phone,
       mobilePhone: t.mobilePhone,
-      dateOfBirth: t.dateOfBirth,
+      iban: t.iban,
+      bic: t.bic,
+      bankName: t.bankName,
+      dateOfBirth: t.dateOfBirth?.split("T")[0],
       occupation: t.occupation,
+      monthlyIncome: t.monthlyIncome,
+      emergencyContactName: t.emergencyContactName,
+      emergencyContactPhone: t.emergencyContactPhone,
       notes: t.notes,
     });
     setShowForm(true);
@@ -81,8 +114,13 @@ export default function TenantsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Mieter wirklich löschen?")) return;
-    await tenantsApi.delete(id);
-    loadTenants();
+    try {
+      await tenantsApi.delete(id);
+      toast("Mieter gelöscht.", "success");
+      loadTenants();
+    } catch (err) {
+      toast(getErrorMessage(err));
+    }
   };
 
   if (loading) {
@@ -101,6 +139,7 @@ export default function TenantsPage() {
           onClick={() => {
             setShowForm(true);
             setEditing(null);
+            setForm({ firstName: "", lastName: "", email: "" });
           }}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
         >
@@ -108,11 +147,10 @@ export default function TenantsPage() {
         </button>
       </div>
 
-      {/* Suche */}
       <div className="mb-6">
         <input
           type="text"
-          placeholder="Mieter suchen..."
+          placeholder="Mieter suchen (mind. 2 Zeichen)…"
           className="w-full max-w-md px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -132,6 +170,7 @@ export default function TenantsPage() {
                   setShowForm(false);
                   setEditing(null);
                 }}
+                aria-label="Schließen"
               >
                 <X size={24} className="text-gray-500" />
               </button>
@@ -230,16 +269,102 @@ export default function TenantsPage() {
                   />
                 </div>
               </div>
+
+              {/* Bankdaten */}
+              <fieldset className="border rounded-lg p-3">
+                <legend className="text-sm font-medium text-gray-700 px-1">
+                  Bankdaten
+                </legend>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      IBAN
+                    </label>
+                    <input
+                      className="w-full px-3 py-2 border rounded-lg"
+                      maxLength={34}
+                      value={form.iban || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, iban: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        BIC
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border rounded-lg"
+                        maxLength={11}
+                        value={form.bic || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, bic: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Bankname
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={form.bankName || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, bankName: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* Finanzen & Notfall */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Monatliches Einkommen
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    value={form.monthlyIncome || ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        monthlyIncome: parseFloat(e.target.value) || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notfallkontakt Name
+                  </label>
+                  <input
+                    className="w-full px-3 py-2 border rounded-lg"
+                    value={form.emergencyContactName || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, emergencyContactName: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  IBAN
+                  Notfallkontakt Telefon
                 </label>
                 <input
                   className="w-full px-3 py-2 border rounded-lg"
-                  value={form.iban || ""}
-                  onChange={(e) => setForm({ ...form, iban: e.target.value })}
+                  value={form.emergencyContactPhone || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, emergencyContactPhone: e.target.value })
+                  }
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Notizen
@@ -253,9 +378,14 @@ export default function TenantsPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium"
+                disabled={submitting}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
               >
-                {editing ? "Speichern" : "Erstellen"}
+                {submitting
+                  ? "Speichern…"
+                  : editing
+                    ? "Speichern"
+                    : "Erstellen"}
               </button>
             </form>
           </div>
@@ -266,7 +396,9 @@ export default function TenantsPage() {
       {tenants.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border">
           <Users size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">Noch keine Mieter vorhanden.</p>
+          <p className="text-gray-500">
+            {search ? "Keine Mieter gefunden." : "Noch keine Mieter vorhanden."}
+          </p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -311,11 +443,7 @@ export default function TenantsPage() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        t.activeLeases > 0
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500"
-                      }`}
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${t.activeLeases > 0 ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
                     >
                       {t.activeLeases}
                     </span>
@@ -325,12 +453,14 @@ export default function TenantsPage() {
                       <button
                         onClick={() => handleEdit(t)}
                         className="text-gray-400 hover:text-blue-600"
+                        aria-label="Bearbeiten"
                       >
                         <Edit size={16} />
                       </button>
                       <button
                         onClick={() => handleDelete(t.id)}
                         className="text-gray-400 hover:text-red-600"
+                        aria-label="Löschen"
                       >
                         <Trash2 size={16} />
                       </button>

@@ -9,9 +9,10 @@
 | ------------------------------- | ------- | ------------------------------------------------------------------------ |
 | .NET SDK                        | 9.0+    | [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/9.0) |
 | Node.js                         | 20+     | [nodejs.org](https://nodejs.org/)                                        |
-| SQL Server LocalDB              | 2022    | Wird mit Visual Studio installiert                                       |
 | Visual Studio 2022 oder VS Code | Aktuell | [visualstudio.com](https://visualstudio.com/)                            |
 | Git                             | 2.x     | [git-scm.com](https://git-scm.com/)                                      |
+
+> **Hinweis:** Eine externe Datenbank ist nicht erforderlich – die App nutzt **SQLite** (Datei-basiert, wird automatisch erstellt).
 
 ### Optional (für MAUI)
 
@@ -29,18 +30,9 @@ git clone <repository-url>
 cd ImmobilienVerwalter
 ```
 
-## 2. SQL Server LocalDB prüfen
+## 2. Datenbank
 
-```bash
-# LocalDB-Instanz prüfen
-sqllocaldb info MSSQLLocalDB
-
-# Falls nicht vorhanden, erstellen und starten
-sqllocaldb create MSSQLLocalDB
-sqllocaldb start MSSQLLocalDB
-```
-
-Die Datenbank wird beim ersten API-Start **automatisch erstellt** (`EnsureCreated()`).
+Die Anwendung nutzt **SQLite** als Datenbank. Die Datenbankdatei `ImmobilienVerwalter.db` wird beim ersten API-Start **automatisch erstellt** und migriert – kein externer Datenbankserver erforderlich.
 
 ## 3. Backend (API) starten
 
@@ -52,8 +44,9 @@ dotnet run
 
 **Die API ist verfügbar unter:**
 
-- API: `https://localhost:5001`
-- Swagger UI: `https://localhost:5001/swagger`
+- API: `http://localhost:5013`
+- Swagger UI: `http://localhost:5013/swagger`
+- Health Check: `http://localhost:5013/health`
 
 ### Konfiguration
 
@@ -62,17 +55,19 @@ Die Konfiguration liegt in `appsettings.json`:
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=ImmobilienVerwalter;Trusted_Connection=true;TrustServerCertificate=true;"
+    "DefaultConnection": "Data Source=ImmobilienVerwalter.db"
   },
   "Jwt": {
-    "Secret": "<min. 32 Zeichen>",
     "Issuer": "ImmobilienVerwalter",
     "Audience": "ImmobilienVerwalterApp"
+  },
+  "Cors": {
+    "AllowedOrigins": ["http://localhost:3000"]
   }
 }
 ```
 
-> ⚠️ **Wichtig:** Den JWT-Secret in Production über User Secrets oder Umgebungsvariablen setzen! Siehe [SECURITY.md](SECURITY.md).
+> ⚠️ **JWT Secret:** In Development wird der Secret aus `appsettings.Development.json` geladen. In Production über die Umgebungsvariable `JWT_SECRET` setzen! Siehe [SECURITY.md](SECURITY.md).
 
 ## 4. Web-Frontend starten
 
@@ -91,7 +86,7 @@ npm run dev
 Falls die API nicht auf dem Standard-Port läuft, eine `.env.local` erstellen:
 
 ```env
-NEXT_PUBLIC_API_URL=https://localhost:5001/api
+NEXT_PUBLIC_API_URL=http://localhost:5013/api
 ```
 
 ## 5. MAUI App starten (optional)
@@ -125,13 +120,13 @@ npm run dev
 
 ### Datenbank zurücksetzen
 
-Die Datenbank kann einfach gelöscht werden – sie wird beim nächsten Start neu erstellt:
+Die SQLite-Datenbankdatei kann einfach gelöscht werden – sie wird beim nächsten Start neu erstellt und migriert:
 
 ```bash
-sqllocaldb stop MSSQLLocalDB
-sqllocaldb delete MSSQLLocalDB
-sqllocaldb create MSSQLLocalDB
-sqllocaldb start MSSQLLocalDB
+# API stoppen, dann:
+cd src/ImmobilienVerwalter.API
+del ImmobilienVerwalter.db
+# API neu starten – DB wird automatisch erstellt
 ```
 
 ### VS Code empfohlene Extensions
@@ -175,17 +170,13 @@ ImmobilienVerwalter/
 
 ## Häufige Probleme
 
-### API startet nicht – SQL Server Fehler
+### API startet nicht – Datenbank-Fehler
 
 ```
-SqlException: Cannot open database "ImmobilienVerwalter"
+SqliteException: SQLite Error...
 ```
 
-**Lösung:** LocalDB prüfen und starten:
-
-```bash
-sqllocaldb start MSSQLLocalDB
-```
+**Lösung:** Die Datenbankdatei `ImmobilienVerwalter.db` im API-Verzeichnis löschen und die API neu starten. Die Migration wird automatisch ausgeführt.
 
 ### CORS-Fehler im Browser
 
@@ -197,4 +188,4 @@ Access to fetch has been blocked by CORS policy
 
 ### JWT Token abgelaufen
 
-Token sind 7 Tage gültig. Bei Ablauf erneut über `/api/auth/login` anmelden.
+Token sind 24 Stunden gültig. Bei Ablauf erneut über `/api/auth/login` anmelden.

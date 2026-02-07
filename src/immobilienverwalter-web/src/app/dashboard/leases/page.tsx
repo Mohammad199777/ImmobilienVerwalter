@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { leasesApi, tenantsApi, unitsApi } from "@/lib/api";
+import { getErrorMessage } from "@/lib/useToast";
+import { useAppToast } from "../layout";
 import { FileText, Plus, Pencil, Trash2, X } from "lucide-react";
 
 interface Lease {
@@ -22,7 +24,6 @@ interface Lease {
   notes?: string;
   isActive: boolean;
 }
-
 interface SelectItem {
   id: string;
   fullName?: string;
@@ -71,10 +72,12 @@ const emptyEditForm = {
 };
 
 export default function LeasesPage() {
+  const toast = useAppToast();
   const [leases, setLeases] = useState<Lease[]>([]);
   const [tenants, setTenants] = useState<SelectItem[]>([]);
   const [vacantUnits, setVacantUnits] = useState<SelectItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -89,12 +92,12 @@ export default function LeasesPage() {
           ? await leasesApi.getActive()
           : await leasesApi.getAll();
       setLeases(res.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, toast]);
 
   useEffect(() => {
     load();
@@ -108,20 +111,24 @@ export default function LeasesPage() {
       ]);
       setTenants(t.data);
       setVacantUnits(u.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
     setForm(emptyForm);
     setShowCreate(true);
   };
 
   const handleCreate = async () => {
+    setSubmitting(true);
     try {
       await leasesApi.create({ ...form, endDate: form.endDate || undefined });
+      toast("Mietvertrag erstellt.", "success");
       setShowCreate(false);
       load();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -146,6 +153,7 @@ export default function LeasesPage() {
 
   const handleUpdate = async () => {
     if (!editId) return;
+    setSubmitting(true);
     try {
       await leasesApi.update(editId, {
         ...editForm,
@@ -153,11 +161,14 @@ export default function LeasesPage() {
         terminationDate: editForm.terminationDate || undefined,
         moveOutDate: editForm.moveOutDate || undefined,
       });
+      toast("Mietvertrag aktualisiert.", "success");
       setShowEdit(false);
       setEditId(null);
       load();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -165,9 +176,10 @@ export default function LeasesPage() {
     if (!confirm("Mietvertrag wirklich löschen?")) return;
     try {
       await leasesApi.delete(id);
+      toast("Mietvertrag gelöscht.", "success");
       load();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
   };
 
@@ -286,14 +298,14 @@ export default function LeasesPage() {
                       <button
                         onClick={() => openEdit(l)}
                         className="text-blue-600 hover:text-blue-800"
-                        title="Bearbeiten"
+                        aria-label="Bearbeiten"
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => handleDelete(l.id)}
                         className="text-red-500 hover:text-red-700"
-                        title="Löschen"
+                        aria-label="Löschen"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -312,7 +324,10 @@ export default function LeasesPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Neuer Mietvertrag</h2>
-              <button onClick={() => setShowCreate(false)}>
+              <button
+                onClick={() => setShowCreate(false)}
+                aria-label="Schließen"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -432,6 +447,8 @@ export default function LeasesPage() {
                   </label>
                   <input
                     type="number"
+                    min={0}
+                    max={24}
                     value={form.noticePeriodMonths}
                     onChange={(e) =>
                       setForm({ ...form, noticePeriodMonths: +e.target.value })
@@ -468,10 +485,12 @@ export default function LeasesPage() {
               </div>
               <button
                 onClick={handleCreate}
-                disabled={!form.tenantId || !form.unitId || !form.coldRent}
+                disabled={
+                  !form.tenantId || !form.unitId || !form.coldRent || submitting
+                }
                 className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                Vertrag anlegen
+                {submitting ? "Anlegen…" : "Vertrag anlegen"}
               </button>
             </div>
           </div>
@@ -489,6 +508,7 @@ export default function LeasesPage() {
                   setShowEdit(false);
                   setEditId(null);
                 }}
+                aria-label="Schließen"
               >
                 <X size={20} />
               </button>
@@ -650,6 +670,8 @@ export default function LeasesPage() {
                   </label>
                   <input
                     type="number"
+                    min={0}
+                    max={24}
                     value={editForm.noticePeriodMonths}
                     onChange={(e) =>
                       setEditForm({
@@ -676,9 +698,10 @@ export default function LeasesPage() {
               </div>
               <button
                 onClick={handleUpdate}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                disabled={submitting}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                Speichern
+                {submitting ? "Speichern…" : "Speichern"}
               </button>
             </div>
           </div>

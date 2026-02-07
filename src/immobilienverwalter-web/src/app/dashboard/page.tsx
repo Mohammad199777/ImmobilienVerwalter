@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { dashboardApi } from "@/lib/api";
+import { getErrorMessage } from "@/lib/useToast";
+import { useAppToast } from "./layout";
 import {
   Building2,
   Home,
@@ -57,6 +59,7 @@ function StatCard({
 }
 
 export default function DashboardPage() {
+  const toast = useAppToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,9 +67,9 @@ export default function DashboardPage() {
     dashboardApi
       .get()
       .then((res) => setData(res.data))
-      .catch(console.error)
+      .catch((err) => toast(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
 
   if (loading) {
     return (

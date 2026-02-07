@@ -17,8 +17,8 @@ Der ImmobilienVerwalter folgt der **Clean Architecture** (auch bekannt als Onion
 │           │          HTTP/REST     │             │
 ├───────────┴────────────────────────┴─────────────┤
 │              ImmobilienVerwalter.API              │
-│         (ASP.NET Core – Port 5001)               │
-│  Controllers → DTOs → Services                   │
+│         (ASP.NET Core – Port 5013)               │
+│  Controllers → DTOs → Services → Middleware      │
 ├──────────────────────────────────────────────────┤
 │         ImmobilienVerwalter.Infrastructure        │
 │  EF Core DbContext, Repositories, UnitOfWork     │
@@ -26,7 +26,7 @@ Der ImmobilienVerwalter folgt der **Clean Architecture** (auch bekannt als Onion
 │            ImmobilienVerwalter.Core               │
 │  Entities, Interfaces, Enums, Business Rules     │
 ├──────────────────────────────────────────────────┤
-│               SQL Server (LocalDB)               │
+│            SQLite (ImmobilienVerwalter.db)        │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -60,7 +60,7 @@ Implementiert die Interfaces aus Core.
 
 **NuGet-Pakete:**
 
-- `Microsoft.EntityFrameworkCore.SqlServer` 9.0.2
+- `Microsoft.EntityFrameworkCore.Sqlite` 9.0.2
 - `Microsoft.EntityFrameworkCore.Tools` 9.0.2
 
 ### 3. API (`ImmobilienVerwalter.API`)
@@ -70,15 +70,16 @@ ASP.NET Core Web API – die Präsentationsschicht.
 | Ordner         | Inhalt                                                                                                    |
 | -------------- | --------------------------------------------------------------------------------------------------------- |
 | `Controllers/` | 9 API-Controller (Auth, Dashboard, Properties, Units, Tenants, Leases, Payments, Expenses, MeterReadings) |
-| `DTOs/Dtos.cs` | Alle Data Transfer Objects (Request/Response)                                                             |
+| `DTOs/Dtos.cs` | Alle Data Transfer Objects (Request/Response) mit Validierungsattributen                                  |
 | `Services/`    | Business-Logik-Services (`AuthService`, `DashboardService`)                                               |
-| `Program.cs`   | App-Konfiguration: DI, Auth, CORS, Swagger, Middleware                                                    |
+| `Middleware/`  | `GlobalExceptionHandler` – zentrale Fehlerbehandlung mit strukturiertem Logging                           |
+| `Program.cs`   | App-Konfiguration: DI, Auth, CORS, Swagger, Health Checks, Auto-Migration                                 |
 
 **NuGet-Pakete:**
 
 - `Microsoft.AspNetCore.Authentication.JwtBearer` 9.0.2
+- `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` 9.0.x
 - `Swashbuckle.AspNetCore` 6.9.0 (Swagger/OpenAPI)
-- `AutoMapper.Extensions.Microsoft.DependencyInjection` 12.0.1
 
 ### 4. Web-Frontend (`immobilienverwalter-web`)
 
@@ -115,13 +116,14 @@ Next.js Single-Page-Application mit App Router.
 | **DTO Pattern**          | Trennung von Domain-Entities und API-Contracts (`PropertyDto`, `PropertyCreateDto`, etc.) |
 | **Soft Delete**          | `IsDeleted`-Flag in `BaseEntity` statt echter Löschung                                    |
 | **Dependency Injection** | ASP.NET Core Built-in DI Container                                                        |
+| **Global Error Handler** | `GlobalExceptionHandler` Middleware für zentrale Exception-Behandlung                     |
 | **MVVM**                 | Model-View-ViewModel in MAUI-App                                                          |
 
 ## Dependency Injection (Registrierung)
 
 ```csharp
 // Datenbankkontext
-services.AddDbContext<AppDbContext>(options => options.UseSqlServer(...));
+services.AddDbContext<AppDbContext>(options => options.UseSqlite(...));
 
 // Repositories & UnitOfWork
 services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -129,6 +131,9 @@ services.AddScoped<IUnitOfWork, UnitOfWork>();
 // Services
 services.AddScoped<IAuthService, AuthService>();
 services.AddScoped<IDashboardService, DashboardService>();
+
+// Health Checks
+services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 ```
 
 Alle Repositories werden **intern** über den `UnitOfWork` bereitgestellt – nicht einzeln im DI registriert.
@@ -136,12 +141,14 @@ Alle Repositories werden **intern** über den `UnitOfWork` bereitgestellt – ni
 ## Kommunikation
 
 ```
-Next.js App ──── HTTP/REST (JSON) ────► ASP.NET Core API ──── EF Core ────► SQL Server
+Next.js App ──── HTTP/REST (JSON) ────► ASP.NET Core API ──── EF Core ────► SQLite
 MAUI App   ──── HTTP/REST (JSON) ────►        │
                                               │
                                     JWT Bearer Token Auth
 ```
 
-- **CORS:** Erlaubt `http://localhost:3000` (Web-Frontend)
-- **Auth:** JWT Token im `Authorization: Bearer <token>` Header
-- **Auto-Migration:** In Development erstellt `EnsureCreated()` die DB automatisch
+- **CORS:** Konfigurierbar über `appsettings.json` → `Cors:AllowedOrigins` (Standard: `http://localhost:3000`)
+- **Auth:** JWT Token im `Authorization: Bearer <token>` Header (24h gültig)
+- **Auto-Migration:** Beim Start wird `db.Database.Migrate()` ausgeführt (mit `EnsureCreated()`-Fallback)
+- **Health Check:** `/health` Endpunkt prüft DB-Verbindung
+- **Fehlerbehandlung:** `GlobalExceptionHandler` Middleware fängt alle Exceptions und gibt strukturierte Fehler-Responses zurück

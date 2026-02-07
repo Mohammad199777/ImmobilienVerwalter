@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ImmobilienVerwalter.API.DTOs;
 using ImmobilienVerwalter.Core.Entities;
 using ImmobilienVerwalter.Core.Interfaces;
@@ -12,11 +13,30 @@ namespace ImmobilienVerwalter.API.Controllers;
 public class MeterReadingsController : ControllerBase
 {
     private readonly IUnitOfWork _uow;
-    public MeterReadingsController(IUnitOfWork uow) => _uow = uow;
+    private readonly ILogger<MeterReadingsController> _logger;
+
+    public MeterReadingsController(IUnitOfWork uow, ILogger<MeterReadingsController> logger)
+    {
+        _uow = uow;
+        _logger = logger;
+    }
+
+    private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private async Task<bool> IsOwnerOfUnit(Guid unitId)
+    {
+        var unit = await _uow.Units.GetByIdAsync(unitId);
+        if (unit == null) return false;
+        var property = await _uow.Properties.GetByIdAsync(unit.PropertyId);
+        return property != null && property.OwnerId == GetUserId();
+    }
 
     [HttpGet("unit/{unitId}")]
     public async Task<ActionResult<IEnumerable<MeterReadingDto>>> GetByUnit(Guid unitId)
     {
+        if (!await IsOwnerOfUnit(unitId))
+            return NotFound();
+
         var readings = await _uow.MeterReadings.GetByUnitIdAsync(unitId);
         return Ok(readings.Select(MapToDto));
     }
@@ -24,8 +44,13 @@ public class MeterReadingsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<MeterReadingDto>> Create([FromBody] MeterReadingCreateDto dto)
     {
-        // Letzten Zählerstand holen für Verbrauchsberechnung
+        if (!await IsOwnerOfUnit(dto.UnitId))
+            return Forbid();
+
+        // Prüfen ob Zählerstand > vorheriger Stand
         var lastReading = await _uow.MeterReadings.GetLatestReadingAsync(dto.UnitId, dto.MeterType);
+        if (lastReading != null && dto.Value < lastReading.Value)
+            return BadRequest(new { message = $"Zählerstand ({dto.Value}) darf nicht kleiner als der vorherige Wert ({lastReading.Value}) sein." });
 
         var reading = new MeterReading
         {
@@ -41,7 +66,9 @@ public class MeterReadingsController : ControllerBase
 
         await _uow.MeterReadings.AddAsync(reading);
         await _uow.SaveChangesAsync();
-        return Ok(MapToDto(reading));
+
+        _logger.LogInformation("Zählerstand für Unit {UnitId}, Typ {MeterType}: {Value}", dto.UnitId, dto.MeterType, dto.Value);
+        return CreatedAtAction(nameof(GetById), new { id = reading.Id }, MapToDto(reading));
     }
 
     [HttpGet("{id}")]
@@ -57,6 +84,8 @@ public class MeterReadingsController : ControllerBase
     {
         var reading = await _uow.MeterReadings.GetByIdAsync(id);
         if (reading == null) return NotFound();
+        if (!await IsOwnerOfUnit(reading.UnitId))
+            return NotFound();
 
         reading.MeterType = dto.MeterType;
         reading.MeterNumber = dto.MeterNumber;
@@ -74,9 +103,13 @@ public class MeterReadingsController : ControllerBase
     {
         var reading = await _uow.MeterReadings.GetByIdAsync(id);
         if (reading == null) return NotFound();
+        if (!await IsOwnerOfUnit(reading.UnitId))
+            return NotFound();
 
         await _uow.MeterReadings.DeleteAsync(id);
         await _uow.SaveChangesAsync();
+
+        _logger.LogInformation("Zählerstand {ReadingId} gelöscht", id);
         return NoContent();
     }
 

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { propertiesApi, unitsApi, UnitCreate, UnitUpdate } from "@/lib/api";
+import { getErrorMessage } from "@/lib/useToast";
+import { useAppToast } from "../layout";
 import { Home, Plus, Pencil, Trash2, X } from "lucide-react";
 
 const unitTypes = [
@@ -41,10 +43,12 @@ const emptyCreate: UnitCreate = {
 };
 
 export default function UnitsPage() {
+  const toast = useAppToast();
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -63,10 +67,10 @@ export default function UnitsPage() {
       setProperties(propRes.data);
       if (propRes.data.length > 0 && !selectedProperty)
         setSelectedProperty(propRes.data[0].id);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
-  }, [selectedProperty]);
+  }, [selectedProperty, toast]);
 
   const loadUnits = useCallback(async () => {
     if (!selectedProperty) {
@@ -76,12 +80,12 @@ export default function UnitsPage() {
     try {
       const res = await unitsApi.getByProperty(selectedProperty);
       setUnits(res.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [selectedProperty]);
+  }, [selectedProperty, toast]);
 
   useEffect(() => {
     loadData();
@@ -92,10 +96,18 @@ export default function UnitsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await unitsApi.create({ ...form, propertyId: selectedProperty });
-    setShowForm(false);
-    setForm(emptyCreate);
-    loadUnits();
+    setSubmitting(true);
+    try {
+      await unitsApi.create({ ...form, propertyId: selectedProperty });
+      toast("Einheit erstellt.", "success");
+      setShowForm(false);
+      setForm(emptyCreate);
+      loadUnits();
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const openEdit = (u: Unit) => {
@@ -116,19 +128,28 @@ export default function UnitsPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editId) return;
-    await unitsApi.update(editId, editForm);
-    setShowEdit(false);
-    setEditId(null);
-    loadUnits();
+    setSubmitting(true);
+    try {
+      await unitsApi.update(editId, editForm);
+      toast("Einheit aktualisiert.", "success");
+      setShowEdit(false);
+      setEditId(null);
+      loadUnits();
+    } catch (err) {
+      toast(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Einheit wirklich löschen?")) return;
     try {
       await unitsApi.delete(id);
+      toast("Einheit gelöscht.", "success");
       loadUnits();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      toast(getErrorMessage(err));
     }
   };
 
@@ -150,9 +171,12 @@ export default function UnitsPage() {
         </button>
       </div>
 
-      {/* Property Selector */}
       <div className="mb-6">
+        <label htmlFor="property-select" className="sr-only">
+          Immobilie auswählen
+        </label>
         <select
+          id="property-select"
           className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
           value={selectedProperty}
           onChange={(e) => setSelectedProperty(e.target.value)}
@@ -165,13 +189,13 @@ export default function UnitsPage() {
         </select>
       </div>
 
-      {/* Form Modal */}
+      {/* Create Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Neue Einheit</h2>
-              <button onClick={() => setShowForm(false)}>
+              <button onClick={() => setShowForm(false)} aria-label="Schließen">
                 <X size={24} className="text-gray-500" />
               </button>
             </div>
@@ -197,6 +221,7 @@ export default function UnitsPage() {
                     type="number"
                     step="0.01"
                     required
+                    min={0.01}
                     className="w-full px-3 py-2 border rounded-lg"
                     value={form.area || ""}
                     onChange={(e) =>
@@ -210,6 +235,7 @@ export default function UnitsPage() {
                   </label>
                   <input
                     type="number"
+                    min={1}
                     className="w-full px-3 py-2 border rounded-lg"
                     value={form.rooms || ""}
                     onChange={(e) =>
@@ -264,6 +290,7 @@ export default function UnitsPage() {
                     type="number"
                     step="0.01"
                     required
+                    min={0}
                     className="w-full px-3 py-2 border rounded-lg"
                     value={form.targetRent || ""}
                     onChange={(e) =>
@@ -277,9 +304,10 @@ export default function UnitsPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium"
+                disabled={submitting}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
               >
-                Erstellen
+                {submitting ? "Erstellen…" : "Erstellen"}
               </button>
             </form>
           </div>
@@ -305,13 +333,11 @@ export default function UnitsPage() {
             >
               <div className="flex justify-between items-start mb-3">
                 <h3 className="font-bold text-gray-900">{u.name}</h3>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full font-medium ${u.status === 0 ? "bg-green-100 text-green-700" : u.status === 1 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}
-                  >
-                    {unitStatuses[u.status]}
-                  </span>
-                </div>
+                <span
+                  className={`text-xs px-2 py-1 rounded-full font-medium ${u.status === 0 ? "bg-green-100 text-green-700" : u.status === 1 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}
+                >
+                  {unitStatuses[u.status]}
+                </span>
               </div>
               <div className="space-y-1 text-sm text-gray-500">
                 <p>
@@ -352,7 +378,7 @@ export default function UnitsPage() {
         </div>
       )}
 
-      {/* EDIT MODAL */}
+      {/* Edit Modal */}
       {showEdit && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
@@ -363,6 +389,7 @@ export default function UnitsPage() {
                   setShowEdit(false);
                   setEditId(null);
                 }}
+                aria-label="Schließen"
               >
                 <X size={24} className="text-gray-500" />
               </button>
@@ -497,9 +524,10 @@ export default function UnitsPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium"
+                disabled={submitting}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
               >
-                Speichern
+                {submitting ? "Speichern…" : "Speichern"}
               </button>
             </form>
           </div>
